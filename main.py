@@ -19,6 +19,8 @@ load_dotenv()
 class ConsumptionData(TypedDict):
     timestamp: str
     totalConsumption: float | None
+    totalFee: float | None
+    temperature: float | None
 
 
 def is_target_date(obj, target_date: datetime) -> bool:
@@ -79,7 +81,9 @@ def get_yesterday_consumption() -> ConsumptionData | None:
     if yesterdays_consumption_data:
         return {
             "timestamp": yesterdays_consumption_data["timestamp"],
-            "totalConsumption": yesterdays_consumption_data["totalConsumption"],
+            "totalConsumption": yesterdays_consumption_data["invoicedConsumption"],
+            "totalFee": yesterdays_consumption_data["totalFee"],
+            "temperature": yesterdays_consumption_data.get("temperature"),
         }
 
     return None
@@ -91,17 +95,32 @@ if __name__ == "__main__":
         topic = os.getenv("NTFY_TOPIC")
 
         if yesterday_data:
-            # format date DD.MM.YYYY
-            date = datetime.fromisoformat(
-                yesterday_data.get("timestamp")[:10]
-            ).strftime("%d.%m.%Y")
+            # Title
             title = "Sähkön kulutustiedot"
             encoded_title = (
                 f"=?UTF-8?B?{base64.b64encode(title.encode('utf-8')).decode('ascii')}?="
             )
+
+            # Body
+            date = f"📅 {datetime.fromisoformat(yesterday_data.get('timestamp')[:10]).strftime('%d.%m.%Y')}"
+            total_consumption = (
+                f"⚡️ {yesterday_data.get('totalConsumption')} kWh"
+                if yesterday_data.get("totalConsumption") is not None
+                else "⚡️ Data puuttuu"
+            )
+            total_fee = (
+                f"💰 {yesterday_data.get('totalFee'):.2f} €"
+                if yesterday_data.get("totalFee") is not None
+                else "💰 Data puuttuu"
+            )
+            temperature = (
+                f"🌡️ {yesterday_data.get('temperature'):.1f} °C"
+                if yesterday_data.get("temperature") is not None
+                else "🌡️ Data puuttuu"
+            )
             requests.post(
                 f"https://ntfy.sh/{topic}",
-                data=f"📅 {date}\n⚡️ {yesterday_data.get('totalConsumption')} kWh".encode(
+                data=f"{date}\n{total_consumption}\n{total_fee}\n{temperature}".encode(
                     encoding="utf-8"
                 ),
                 headers={
